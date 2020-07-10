@@ -28,7 +28,7 @@ class TestSubaruSafety(common.PandaSafetyTest):
   STANDSTILL_THRESHOLD = 20  # 1kph (see dbc file)
   RELAY_MALFUNCTION_ADDR = 0x122
   RELAY_MALFUNCTION_BUS = 0
-  FWD_BLACKLISTED_ADDRS = {2: [290, 545, 802]}
+  FWD_BLACKLISTED_ADDRS = {2: [0x122, 0x221, 0x322]}
   FWD_BUS_LOOKUP = {0: 2, 2: 0}
 
   def setUp(self):
@@ -42,13 +42,13 @@ class TestSubaruSafety(common.PandaSafetyTest):
     self.safety.set_rt_torque_last(t)
 
   def _torque_driver_msg(self, torque):
-    values = {"Steer_Torque_Sensor": torque, "counter": self.cnt_torque_driver % 4}
+    values = {"Steer_Torque_Sensor": torque, "Counter": self.cnt_torque_driver % 4}
     self.__class__.cnt_torque_driver += 1
     return self.packer.make_can_msg_panda("Steering_Torque", 0, values)
 
   def _speed_msg(self, speed):
     # subaru safety doesn't use the scaled value, so undo the scaling
-    values = {s: speed*0.057 for s in ["FR", "FL", "RR", "RL"]}
+    values = {s: speed * 0.057 for s in ["FR", "FL", "RR", "RL"]}
     values["Counter"] = self.cnt_speed % 4
     self.__class__.cnt_speed += 1
     return self.packer.make_can_msg_panda("Wheel_Speeds", 0, values)
@@ -67,13 +67,13 @@ class TestSubaruSafety(common.PandaSafetyTest):
     self.__class__.cnt_gas += 1
     return self.packer.make_can_msg_panda("Throttle", 0, values)
 
-  def _pcm_status_msg(self, cruise):
-    values = {"Cruise_Activated": cruise, "Counter": self.cnt_cruise % 4}
+  def _pcm_status_msg(self, enable):
+    values = {"Cruise_Activated": enable, "Counter": self.cnt_cruise % 4}
     self.__class__.cnt_cruise += 1
     return self.packer.make_can_msg_panda("CruiseControl", 0, values)
 
   def _set_torque_driver(self, min_t, max_t):
-    for i in range(0, 5):
+    for _ in range(0, 5):
       self._rx(self._torque_driver_msg(min_t))
     self._rx(self._torque_driver_msg(max_t))
 
@@ -142,7 +142,6 @@ class TestSubaruSafety(common.PandaSafetyTest):
       self._set_torque_driver(-max_driver_torque * sign, -max_driver_torque * sign)
       self.assertFalse(self._tx(self._torque_msg((MAX_STEER - MAX_RATE_DOWN + 1) * sign)))
 
-
   def test_realtime_limits(self):
     self.safety.set_controls_allowed(True)
 
@@ -164,46 +163,6 @@ class TestSubaruSafety(common.PandaSafetyTest):
       self.safety.set_timer(RT_INTERVAL + 1)
       self.assertTrue(self._tx(self._torque_msg(sign * (MAX_RT_DELTA - 1))))
       self.assertTrue(self._tx(self._torque_msg(sign * (MAX_RT_DELTA + 1))))
-
-
-class TestSubaruLegacySafety(TestSubaruSafety):
-
-  TX_MSGS = [[0x164, 0], [0x221, 0], [0x322, 0]]
-  RELAY_MALFUNCTION_ADDR = 0x164
-  RELAY_MALFUNCTION_BUS = 0
-  FWD_BLACKLISTED_ADDRS = {2: [356, 545, 802]}
-  FWD_BUS_LOOKUP = {0: 2, 2: 0}
-
-  def setUp(self):
-    self.packer = CANPackerPanda("subaru_outback_2015_eyesight")
-    self.safety = libpandasafety_py.libpandasafety
-    self.safety.set_safety_hooks(Panda.SAFETY_SUBARU_LEGACY, 0)
-    self.safety.init_tests()
-
-  # subaru legacy safety doesn't have brake checks
-  def test_prev_brake(self): pass
-  def test_not_allow_brake_when_moving(self): pass
-  def test_allow_brake_at_zero_speed(self): pass
-  # doesn't have speed checks either
-  def test_sample_speed(self): pass
-
-  def _torque_driver_msg(self, torque):
-    # TODO: figure out if this scaling factor from the DBC is right.
-    # if it is, remove the scaling from here and put it in the safety code
-    values = {"Steer_Torque_Sensor": torque*8}
-    return self.packer.make_can_msg_panda("Steering_Torque", 0, values)
-
-  def _torque_msg(self, torque):
-    values = {"LKAS_Command": torque}
-    return self.packer.make_can_msg_panda("ES_LKAS", 0, values)
-
-  def _gas_msg(self, gas):
-    values = {"Throttle_Pedal": gas}
-    return self.packer.make_can_msg_panda("Throttle", 0, values)
-
-  def _pcm_status_msg(self, cruise):
-    values = {"Cruise_Activated": cruise}
-    return self.packer.make_can_msg_panda("CruiseControl", 0, values)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ from panda.tests.safety import libpandasafety_py
 import panda.tests.safety.common as common
 from panda.tests.safety.common import CANPackerPanda
 
+GAS_THRESHOLD = 2.14
 
 class TestChryslerSafety(common.PandaSafetyTest, common.TorqueSteeringSafetyTest):
   TX_MSGS = [[571, 0], [658, 0], [678, 0]]
@@ -30,14 +31,14 @@ class TestChryslerSafety(common.PandaSafetyTest, common.TorqueSteeringSafetyTest
     self.packer = CANPackerPanda("chrysler_pacifica_2017_hybrid")
     self.safety = libpandasafety_py.libpandasafety
     self.safety.set_safety_hooks(Panda.SAFETY_CHRYSLER, 0)
-    self.safety.init_tests_chrysler()
+    self.safety.init_tests()
 
   def _button_msg(self, cancel):
     values = {"ACC_CANCEL": cancel}
     return self.packer.make_can_msg_panda("WHEEL_BUTTONS", 0, values)
 
-  def _pcm_status_msg(self, active):
-    values = {"ACC_STATUS_2": 0x7 if active else 0, \
+  def _pcm_status_msg(self, enable):
+    values = {"ACC_STATUS_2": 0x7 if enable else 0,
               "COUNTER": self.cnt_cruise % 16}
     self.__class__.cnt_cruise += 1
     return self.packer.make_can_msg_panda("ACC_2", 0, values)
@@ -52,8 +53,8 @@ class TestChryslerSafety(common.PandaSafetyTest, common.TorqueSteeringSafetyTest
     return self.packer.make_can_msg_panda("ACCEL_GAS_134", 0, values)
 
   def _brake_msg(self, brake):
-    values = {"BRAKE_PRESSED_2": 5 if brake else 0, \
-                "COUNTER": self.cnt_brake % 16}
+    values = {"BRAKE_PRESSED_2": 5 if brake else 0,
+              "COUNTER": self.cnt_brake % 16}
     self.__class__.cnt_brake += 1
     return self.packer.make_can_msg_panda("BRAKE_2", 0, values)
 
@@ -65,6 +66,15 @@ class TestChryslerSafety(common.PandaSafetyTest, common.TorqueSteeringSafetyTest
   def _torque_msg(self, torque):
     values = {"LKAS_STEERING_TORQUE": torque}
     return self.packer.make_can_msg_panda("LKAS_COMMAND", 0, values)
+
+  def test_prev_gas(self):
+    self.assertFalse(self.safety.get_gas_pressed_prev())
+
+    # chrysler has an additional check on wheel speed
+    self._rx(self._speed_msg(GAS_THRESHOLD + 1))
+    for pressed in [self.GAS_PRESSED_THRESHOLD + 1, 0]:
+      self._rx(self._gas_msg(pressed))
+      self.assertEqual(bool(pressed), self.safety.get_gas_pressed_prev())
 
   def test_disengage_on_gas(self):
     self.safety.set_controls_allowed(1)
