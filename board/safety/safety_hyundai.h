@@ -6,6 +6,16 @@ const int HYUNDAI_MAX_RATE_DOWN = 7;
 const int HYUNDAI_DRIVER_TORQUE_ALLOWANCE = 50;
 const int HYUNDAI_DRIVER_TORQUE_FACTOR = 2;
 const int HYUNDAI_STANDSTILL_THRSLD = 30;  // ~1kph
+bool hyundai_has_scc = false;
+int OP_LKAS_live = 0;
+int OP_MDPS_live = 0;
+int OP_CLU_live = 0;
+int OP_SCC_live = 0;
+int car_SCC_live = 0;
+int OP_EMS_live = 0;
+int hyundai_mdps_bus = 0;
+bool hyundai_LCAN_on_bus1 = false;
+bool hyundai_forward_bus1 = false;
 const CanMsg HYUNDAI_TX_MSGS[] = {
   {832, 0, 8}, {832, 1, 8}, // LKAS11 Bus 0, 1
   {1265, 0, 4}, {1265, 1, 4}, {1265, 2, 4}, // CLU11 Bus 0, 1, 2
@@ -35,23 +45,13 @@ const int HYUNDAI_RX_CHECK_LEN = sizeof(hyundai_rx_checks) / sizeof(hyundai_rx_c
 AddrCheckStruct hyundai_legacy_rx_checks[] = {
   {.msg = {{608, 0, 8, .check_checksum = true, .max_counter = 3U, .expected_timestep = 10000U},
            {881, 0, 8, .expected_timestep = 10000U}}},
-  {.msg = {{902, 0, 8, .expected_timestep = 10000U}}},
-  {.msg = {{916, 0, 8, .expected_timestep = 10000U}}},
+  {.msg = {{902, 0, 8, .expected_timestep = 20000U}}},
+  {.msg = {{916, 0, 8, .expected_timestep = 20000U}}},
   {.msg = {{1057, 0, 8, .check_checksum = true, .max_counter = 15U, .expected_timestep = 20000U}}},
 };
 const int HYUNDAI_LEGACY_RX_CHECK_LEN = sizeof(hyundai_legacy_rx_checks) / sizeof(hyundai_legacy_rx_checks[0]);
 
 bool hyundai_legacy = false;
-
-bool hyundai_has_scc = false;
-int OP_LKAS_live = 0;
-int OP_MDPS_live = 0;
-int OP_CLU_live = 0;
-int OP_SCC_live = 0;
-int OP_EMS_live = 0;
-int hyundai_mdps_bus = 0;
-bool hyundai_LCAN_on_bus1 = false;
-bool hyundai_forward_bus1 = false;
 
 static uint8_t hyundai_get_counter(CAN_FIFOMailBox_TypeDef *to_push) {
   int addr = GET_ADDR(to_push);
@@ -107,7 +107,6 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   bool valid;
   int addr = GET_ADDR(to_push);
   int bus = GET_BUS(to_push);
-
   if (hyundai_legacy) {
     valid = addr_safety_check(to_push, hyundai_legacy_rx_checks, HYUNDAI_LEGACY_RX_CHECK_LEN,
                               hyundai_get_checksum, hyundai_compute_checksum,
@@ -126,6 +125,8 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       hyundai_forward_bus1 = false;
     }
   }
+  if (bus == 1 && hyundai_LCAN_on_bus1) {valid = false;}
+
   // check if we have a MDPS on Bus1 and LCAN not on the bus
   if (bus == 1 && (addr == 593 || addr == 897) && !hyundai_LCAN_on_bus1) {
     if (hyundai_mdps_bus != bus || !hyundai_forward_bus1) {
@@ -141,26 +142,6 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   }
 
   if (valid) {
-    // check if we have a LCAN on Bus1
-    if (bus == 1 && (addr == 1296 || addr == 524)) {
-      if (hyundai_forward_bus1 || !hyundai_LCAN_on_bus1) {
-        hyundai_LCAN_on_bus1 = true;
-        hyundai_forward_bus1 = false;
-      }
-    }
-    // check if we have a MDPS on Bus1 and LCAN not on the bus
-    if (bus == 1 && (addr == 593 || addr == 897) && !hyundai_LCAN_on_bus1) {
-      if (!hyundai_forward_bus1) {
-        hyundai_mdps_bus = bus;
-        hyundai_forward_bus1 = true;
-      }
-    }
-    // check if we have a SCC on Bus1 and LCAN not on the bus
-    if (bus == 1 && addr == 1057 && !hyundai_LCAN_on_bus1) {
-      if (!hyundai_forward_bus1) {
-        hyundai_forward_bus1 = true;
-      }
-    }
     if (addr == 593 && bus == hyundai_mdps_bus) {
       int torque_driver_new = ((GET_BYTES_04(to_push) & 0x7ff) * 0.79) - 808; // scale down new driver torque signal to match previous one
       // update array of samples
@@ -168,7 +149,7 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     }
 
     // enter controls on rising edge of ACC, exit controls on ACC off
-    if (addr == 1057 && OP_SCC_live && (bus != 1 || !hyundai_LCAN_on_bus1)) { // for cars with long control
+    if (addr == 1057 && OP_SCC_live) { // for cars with long control
       hyundai_has_scc = true;
       car_SCC_live = 50;
       // 2 bits: 13-14
@@ -181,22 +162,10 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       }
       cruise_engaged_prev = cruise_engaged;
     }
-    if (addr == 1056 && !OP_SCC_live && (bus != 1 || !hyundai_LCAN_on_bus1)) { // for cars without long control
+    if (addr == 1056 && !OP_SCC_live) { // for cars without long control
       hyundai_has_scc = true;
       // 2 bits: 13-14
       int cruise_engaged = GET_BYTES_04(to_push) & 0x1; // ACC main_on signal
-      if (cruise_engaged && !cruise_engaged_prev) {
-        controls_allowed = 1;
-      }
-      if (!cruise_engaged) {
-        controls_allowed = 0;
-      }
-      cruise_engaged_prev = cruise_engaged;
-    }
-    // cruise control for car without SCC
-    if (addr == 871 && !hyundai_has_scc && OP_SCC_live && bus == 0) {
-      // first byte
-      int cruise_engaged = (GET_BYTES_04(to_push) & 0xFF);
       if (cruise_engaged && !cruise_engaged_prev) {
         controls_allowed = 1;
       }
@@ -235,10 +204,9 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     if (addr == 608 && OP_SCC_live && bus == 0) {
       gas_pressed = (GET_BYTE(to_push, 7) >> 6) != 0;
     }
-    if (hyundai_legacy && (addr == 881) && OP_SCC_live && bus == 0) {
+    if (addr == 881 && hyundai_legacy && OP_SCC_live && bus == 0) {
       gas_pressed = (((GET_BYTE(to_push, 4) & 0x7F) << 1) | GET_BYTE(to_push, 3) >> 7) != 0;
     }
-
     // sample wheel speed, averaging opposite corners
     if (addr == 902 && bus == 0) {
       int hyundai_speed = GET_BYTES_04(to_push) & 0x3FFF;  // FL
@@ -246,13 +214,12 @@ static int hyundai_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       hyundai_speed /= 2;
       vehicle_moving = hyundai_speed > HYUNDAI_STANDSTILL_THRSLD;
     }
-
     // exit controls on rising edge of brake press for cars with long control
     if (addr == 916 && OP_SCC_live && bus == 0) {
       brake_pressed = (GET_BYTE(to_push, 6) >> 7) != 0;
     }
 
-    generic_rx_checks((addr == 832));
+    generic_rx_checks((addr == 832 && bus == 0));
   }
   return valid;
 }
@@ -332,7 +299,7 @@ static int hyundai_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
   if (addr == 593) {OP_MDPS_live = 20;}
   if (addr == 1265 && bus == 1) {OP_CLU_live = 20;} // only count mesage created for MDPS
   if (addr == 1057) {OP_SCC_live = 20; if (car_SCC_live > 0) {car_SCC_live -= 1;}}
-  if (addr == 790) {OP_EMS_live = 20;}  
+  if (addr == 790) {OP_EMS_live = 20;}
 
   // 1 allows the message through
   return tx;
