@@ -1,13 +1,14 @@
 int openpilot_live = 0;
+int mdps_bus = -1;
 bool speed_spoof_active = false;
 
-void spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
+void mdps_spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
   bool mph_speed = GET_BYTE(to_fwd, 2) & 0x2;
   int enable_speed = mph_speed ? 38 : 60;
-  int speed = GET_BYTE(to_fwd, 1) | (GET_BYTE(to_fwd, 2) & 0x1) << 8;
+  int speed = (GET_BYTE(to_fwd, 1) | (GET_BYTE(to_fwd, 2) & 0x1) << 8) * 0.5;
   if (speed < enable_speed) {
     to_fwd->RDLR &= 0xFFFE00FF;
-    to_fwd->RDLR |= enable_speed << 8;
+    to_fwd->RDLR |= (enable_speed * 2) << 8;
   }
 };
 
@@ -56,7 +57,7 @@ static int default_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
   if (bus_num == 0) {
     bus_fwd = 2;
     if (addr == 1265 && speed_spoof_active) {
-      spoof_speed(to_fwd);
+      mdps_spoof_speed(to_fwd);
     }
   }
   if (bus_num == 2) {
