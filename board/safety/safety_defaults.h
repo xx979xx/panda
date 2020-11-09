@@ -12,6 +12,18 @@ void spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
 
 int default_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   UNUSED(to_push);
+  if (!speed_spoof_active) {speed_spoof_active = true;}
+  // TODO: Openpilot send de/activation cmd
+  // int bus = GET_BUS(to_push);
+  // int addr = GET_ADDR(to_push);
+  // if (bus == 0 && addr == 832) {
+  //   if (GET_BYTE(to_push, 0) & 0x3) {
+  //     speed_spoof_active = true;
+  //   }
+  //   else {
+  //     speed_spoof_active = false;
+  //   }
+  // }
   return true;
 }
 
