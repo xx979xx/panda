@@ -1,3 +1,4 @@
+int openpilot_live = 0;
 bool speed_spoof_active = false;
 
 void spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
@@ -16,11 +17,12 @@ int default_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   // TODO: Openpilot send de/activation cmd
   // int bus = GET_BUS(to_push);
   // int addr = GET_ADDR(to_push);
-  // if (bus == 0 && addr == 832) {
-  //   if (GET_BYTE(to_push, 0) & 0x3) {
+  // if (bus == 0 && addr == 0x2AB) {
+  //   openpilot_live = 2;
+  //   if (GET_BYTE(to_push, 0) & 0x7) {
   //     speed_spoof_active = true;
   //   }
-  //   else {
+  //   else if (GET_BYTE(to_push, 0) & 0x3){
   //     speed_spoof_active = false;
   //   }
   // }
@@ -80,7 +82,15 @@ static void alloutput_init(int16_t param) {
 }
 
 static int alloutput_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
-  UNUSED(to_send);
+  int addr = GET_ADDR(to_send);
+  if (addr == 0x2AA) {
+    to_send->RDLR &= speed_spoof_active ? 0x7 : 0x3;
+    if (openpilot_live < 1) {
+      // speed_spoof_active = false;
+    } else {
+      speed_spoof_active--;
+    }
+  }
   return true;
 }
 

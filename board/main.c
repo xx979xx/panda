@@ -711,7 +711,10 @@ void TIM1_BRK_TIM9_IRQ_Handler(void) {
       if (heartbeat_counter < __UINT32_MAX__) {
         heartbeat_counter += 1U;
       }
-
+      // send empty status msg, will be modify it at safety tx hook
+      CAN1->sTxMailBox[0].TDLR = 0;
+      CAN1->sTxMailBox[0].TDTR = 4;
+      CAN1->sTxMailBox[0].TIR = (0x2AAU << 21) | 1U;
       #ifdef EONN
       // check heartbeat counter if we are running EON code.
       // if the heartbeat has been gone for a while, go to SILENT safety mode and enter power save
