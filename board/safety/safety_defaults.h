@@ -13,7 +13,7 @@ void mdps_spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
   }
 };
 void scc_spoof_address(CAN_FIFOMailBox_TypeDef *to_fwd){
-  int addr = GET_ADDR(to_fwd);
+  // int addr = GET_ADDR(to_fwd);
   to_fwd->RIR += 0x1400000; // addr + 10
 }
 
@@ -73,10 +73,10 @@ static int nooutput_tx_lin_hook(int lin_num, uint8_t *data, int len) {
 static int default_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
   int addr = GET_ADDR(to_fwd);
   int bus_fwd = -1;
-  bool scc_address = addr == 1056 || addr == 1057 || addr == 1290 || addr == 905 || addr == 1186
+  bool scc_address = addr == 1056 || addr == 1057 || addr == 1290 || addr == 905 || addr == 1186;
 
   if (bus_num == 0) {
-    bool forward_to_bus1 = scc_bus == 1 && !scc_address
+    bool forward_to_bus1 = scc_bus == 1 && !scc_address;
     bus_fwd = forward_to_bus1 ? 12 : 2;
     if (addr == 1265 && mdps_spoof_active) {
       mdps_spoof_speed(to_fwd);
