@@ -712,9 +712,12 @@ void TIM1_BRK_TIM9_IRQ_Handler(void) {
         heartbeat_counter += 1U;
       }
       // send empty status msg, will be modify it at safety tx hook
-      CAN1->sTxMailBox[0].TDLR = 0;
-      CAN1->sTxMailBox[0].TDTR = 4;
-      CAN1->sTxMailBox[0].TIR = (0x2AAU << 21) | 1U;
+      empty_can_msg.RDLR = 0;
+      empty_can_msg.RDHR = 0;
+      empty_can_msg.RDTR = 4;
+      empty_can_msg.RIR = (0x2AAU << 21) | 1U;
+      can_send(&empty_can_msg, 0, false);
+
       #ifdef EONN
       // check heartbeat counter if we are running EON code.
       // if the heartbeat has been gone for a while, go to SILENT safety mode and enter power save

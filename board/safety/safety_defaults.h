@@ -91,7 +91,7 @@ static int alloutput_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
     if (openpilot_live < 1) {
       // mdps_spoof_active = false;
     } else {
-      mdps_spoof_active--;
+      openpilot_live--;
     }
   }
   return true;
