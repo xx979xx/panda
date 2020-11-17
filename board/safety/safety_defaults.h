@@ -21,7 +21,7 @@ int default_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     mdps_bus = bus;
     puts("  MDPS on bus ");puth2(bus);puts("\n");
   }
-  if (!mdps_spoof_active && mdps_bus == 2) {
+  if (!mdps_spoof_active && (mdps_bus == 1 || mdps_bus == 2)) {
     mdps_spoof_active = true;
     puts("  MDPS speed spoofing enabled\n");
   }
@@ -66,12 +66,12 @@ static int default_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_fwd) {
   int bus_fwd = -1;
 
   if (bus_num == 0) {
-    bus_fwd = 2;
+    bus_fwd = mdps_bus;
     if (addr == 1265 && mdps_spoof_active) {
       mdps_spoof_speed(to_fwd);
     }
   }
-  if (bus_num == 2) {
+  else if (bus_num == mdps_bus) {
     bus_fwd = 0;
   }
   return bus_fwd;
