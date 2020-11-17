@@ -712,11 +712,11 @@ void TIM1_BRK_TIM9_IRQ_Handler(void) {
         heartbeat_counter += 1U;
       }
       // send empty status msg, will be modify it at safety tx hook
-      empty_can_msg.RDLR = 0;
-      empty_can_msg.RDHR = 0;
-      empty_can_msg.RDTR = 4;
-      empty_can_msg.RIR = (0x2AAU << 21) | 1U;
-      can_send(&empty_can_msg, 0, false);
+      empty_msg.RDLR = 0;
+      empty_msg.RDHR = 0;
+      empty_msg.RDTR = 4;
+      empty_msg.RIR = (0x2AAU << 21) | 1;
+      can_send(&empty_msg, 0, false);
 
       #ifdef EONN
       // check heartbeat counter if we are running EON code.

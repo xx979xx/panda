@@ -6,7 +6,7 @@ void mdps_spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
   bool mph_speed = GET_BYTE(to_fwd, 2) & 0x2;
   int enable_speed = mph_speed ? 38 : 60;
   int speed = (GET_BYTE(to_fwd, 1) | (GET_BYTE(to_fwd, 2) & 0x1) << 8) * 0.5;
-  puts("  car speed: ");puth2(speed); puts("\r")
+  puts("  car speed: ");puth2(speed); puts("\r");
 
   if (speed < enable_speed) {
     to_fwd->RDLR &= 0xFFFE00FF;
@@ -19,11 +19,11 @@ int default_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   int addr = GET_ADDR(to_push);
   if (addr == 524 && bus != mdps_bus && mdps_bus != 0) {
     mdps_bus = bus;
-    puts("  MDPS on bus ");puth2(bus);puts("\n")
+    puts("  MDPS on bus ");puth2(bus);puts("\n");
   }
   if (!mdps_spoof_active && mdps_bus == 2) {
     mdps_spoof_active = true;
-    puts("  MDPS speed spoofing enabled\n")
+    puts("  MDPS speed spoofing enabled\n");
   }
   // TODO: Openpilot send de/activation cmd
   // if (bus == 0 && addr == 0x2AB) {
@@ -46,6 +46,7 @@ static void nooutput_init(int16_t param) {
   UNUSED(param);
   controls_allowed = false;
   relay_malfunction_reset();
+  puts("  safety mode set to NOOUTPUT\n");
 }
 
 static int nooutput_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
@@ -90,6 +91,7 @@ static void alloutput_init(int16_t param) {
   UNUSED(param);
   controls_allowed = true;
   relay_malfunction_reset();
+  puts("  safety mode set to ALLOUTPUT\n");
 }
 
 static int alloutput_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
