@@ -6,6 +6,8 @@ void mdps_spoof_speed(CAN_FIFOMailBox_TypeDef *to_fwd){
   bool mph_speed = GET_BYTE(to_fwd, 2) & 0x2;
   int enable_speed = mph_speed ? 38 : 60;
   int speed = (GET_BYTE(to_fwd, 1) | (GET_BYTE(to_fwd, 2) & 0x1) << 8) * 0.5;
+  puts("  car speed: ");puth2(speed); puts("\r")
+
   if (speed < enable_speed) {
     to_fwd->RDLR &= 0xFFFE00FF;
     to_fwd->RDLR |= (enable_speed * 2) << 8;
@@ -17,16 +19,22 @@ int default_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
   int addr = GET_ADDR(to_push);
   if (addr == 524 && bus != mdps_bus && mdps_bus != 0) {
     mdps_bus = bus;
+    puts("  MDPS on bus ");puth2(bus);puts("\n")
   }
-  if (!mdps_spoof_active && mdps_bus == 2) {mdps_spoof_active = true;}
+  if (!mdps_spoof_active && mdps_bus == 2) {
+    mdps_spoof_active = true;
+    puts("  MDPS speed spoofing enabled\n")
+  }
   // TODO: Openpilot send de/activation cmd
   // if (bus == 0 && addr == 0x2AB) {
   //   openpilot_live = 2;
   //   if (GET_BYTE(to_push, 0) & 0x7) {
   //     mdps_spoof_active = true;
+  //     puts("  Openpilot enabled mdps spoofing\n")
   //   }
   //   else if (GET_BYTE(to_push, 0) & 0x3){
   //     mdps_spoof_active = false;
+  //     puts("  Openpilot disabled mdps spoofing\n")
   //   }
   // }
   return true;
@@ -90,6 +98,7 @@ static int alloutput_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
     to_send->RDLR &= mdps_spoof_active ? 0x7 : 0x3;
     if (openpilot_live < 1) {
       // mdps_spoof_active = false;
+      // puts("  Openpilot not live, mdps speed spoofing disabled\n")
     } else {
       openpilot_live--;
     }
