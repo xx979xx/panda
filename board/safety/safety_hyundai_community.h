@@ -6,6 +6,7 @@ int OP_SCC_live = 0;
 int car_SCC_live = 0;
 int OP_EMS_live = 0;
 int HKG_mdps_bus = -1;
+int cruise_button_prev;
 const CanMsg HYUNDAI_COMMUNITY_TX_MSGS[] = {
   {832, 0, 8}, {832, 1, 8}, // LKAS11 Bus 0, 1
   {1265, 0, 4}, {1265, 1, 4}, {1265, 2, 4}, // CLU11 Bus 0, 1, 2
@@ -49,7 +50,7 @@ static int hyundai_community_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
     } else if (bus == 1 && !HKG_LCAN_on_bus1) {
       HKG_mdps_bus = bus;
       HKG_forward_bus1 = true;
-    } 
+    }
   }
   // check if we have a SCC on Bus1 and LCAN not on the bus
   if (bus == 1 && addr == 1057 && !HKG_LCAN_on_bus1) {
@@ -108,14 +109,14 @@ static int hyundai_community_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
       // first byte
       int cruise_button = (GET_BYTES_04(to_push) & 0x7);
       // enable on both accel and decel buttons falling edge
-      if (!cruise_button && (cruise_engaged_prev == 1 || cruise_engaged_prev == 2)) {
+      if (!cruise_button && (cruise_button_prev == 1 || cruise_button_prev == 2)) {
         controls_allowed = 1;
       }
       // disable on cancel rising edge
       if (cruise_button == 4) {
         controls_allowed = 0;
       }
-      cruise_engaged_prev = cruise_button;
+      cruise_button_prev = cruise_button;
     }
     // exit controls on rising edge of gas press for cars with long control
     if (addr == 608 && OP_SCC_live && bus == 0) {
@@ -207,7 +208,7 @@ static int hyundai_community_tx_hook(CAN_FIFOMailBox_TypeDef *to_send) {
   // ensuring that only the cancel button press is sent (VAL 4) when controls are off.
   // This avoids unintended engagements while still allowing resume spam
   //allow clu11 to be sent to MDPS if MDPS is not on bus0
-  if (addr == 1265 && !controls_allowed && (bus != HKG_mdps_bus && HKG_mdps_bus == 1)) { 
+  if (addr == 1265 && !controls_allowed && (bus != HKG_mdps_bus && HKG_mdps_bus == 1)) {
     if ((GET_BYTES_04(to_send) & 0x7) != 4) {
       tx = 0;
     }
@@ -272,7 +273,7 @@ static int hyundai_community_fwd_hook(int bus_num, CAN_FIFOMailBox_TypeDef *to_f
         }
       } else if (HKG_mdps_bus == 0) {
         bus_fwd = fwd_to_bus1; // EON create LKAS and LFA for Car
-        OP_LKAS_live -= 1; 
+        OP_LKAS_live -= 1;
       } else {
         OP_LKAS_live -= 1; // EON create LKAS and LFA for Car and MDPS
       }
